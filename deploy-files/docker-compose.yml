@@ -1,0 +1,50 @@
+version: '3.8'
+
+services:
+  flutter-assistant-node-app:
+    container_name: flutter-assistant-node-app
+    build:
+      context: ../
+      dockerfile: Dockerfile
+    restart: always
+    ports:
+      - "3000:3000"
+      - "9229:9229"
+    depends_on:
+      - flutter-assistant-postgres
+    environment:
+      - PROJECT_NAME=flutter-assistant
+      - NODE_APP_PORT=3000
+      - PGDB_HOST=flutter-assistant-postgres
+      - PGDB_PORT=5432
+      - PGDB_USERNAME=aghigh
+      - PGDB_PASSWORD=123456
+      - PGDB_DATABASE_NAME=flutter_assistant_db
+      - OPENAI_API_KEY=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
+      - SSH_HOST=156.236.31.192
+      - SSH_PORT=2112
+      - SSH_USER=root
+      - SSH_PRIVATE_KEY_PASSPHRASE=loveflutter
+    networks:
+      - my_network
+
+  flutter-assistant-postgres:
+    container_name: flutter-assistant-postgres
+    image: postgres:16.1
+    restart: always
+    environment:
+      - POSTGRES_USER=aghigh
+      - POSTGRES_PASSWORD=123456
+      - POSTGRES_DB=flutter_assistant_db
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - ~/flutter-assistant-data/postgres_data:/var/lib/postgresql/data/
+      - ~/flutter-assistant-data/postgres_data:/digikala_pricing_db.bak
+      - ../database/postgres:/docker-entrypoint-initdb.d/
+    networks:
+      - my_network
+
+networks:
+  my_network:
+    driver: bridge
