@@ -10,7 +10,7 @@ export class OpenaiService {
 	private openai: OpenAI;
 	static instance: OpenaiService;
 	static assistantId = 'asst_wW2gLwn2JL6Vk9Egtoqj1TFA';
-	static apiKey = process.env.OPENAI_API_KEY || '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';
+	static apiKey = process.env.OPENAI_API_KEY || '';
 
 	constructor() {
 		this.openai = new OpenAI({

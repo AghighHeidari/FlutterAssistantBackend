@@ -69,7 +69,7 @@ class OpenaiController {
 				}
 			} catch (e) {
 				console.log(e);
-				reject(e);
+				// reject(e);
 			}
 		});
 		threadPromises.push(threadPromise, threadPromise, threadPromise, threadPromise, threadPromise);
@@ -93,6 +93,10 @@ class OpenaiController {
 				const response = await OpenaiService.getInstance().sendPromptToAssistant(OpenaiService.assistantId, threadId!, promptify(requirements));
 				if (response) {
 					const code = response.replace('```dart', '').replace('```', '');
+					await Database.getInstance().none('UPDATE build SET code = $(code) WHERE id = $(build_id)', {
+						code,
+						build_id: buildId
+					});
 					try {
 						url = await SSHService.getInstance().publishCode(buildId, code, user.username);
 						if (url) {
@@ -100,16 +104,16 @@ class OpenaiController {
 							resolve(url)
 						} else {
 							console.error('Publishing code failed!');
-							reject('Publishing code failed!');
+							// reject('Publishing code failed!');
 						}
 					} catch (e: any) {
 						console.log(e);
-						reject(e);
+						// reject(e);
 					}
 				}
 			} catch (e) {
 				console.log(e);
-				reject(e)
+				// reject(e)
 			}
 		});
 		promptPromises.push(promptPromise, promptPromise, promptPromise, promptPromise, promptPromise);

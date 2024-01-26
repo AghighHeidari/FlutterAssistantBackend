@@ -1,8 +1,8 @@
-import {Config, NodeSSH} from 'node-ssh';
+import {Config, NodeSSH, SSHExecCommandResponse} from 'node-ssh';
 import _ from "lodash";
-import Database from "../database/postgres/config.js";
 import DBService from "./db-service.js";
 import axios from "axios";
+import BlueBird from "bluebird";
 
 class SSHService {
 	static instance: SSHService;
@@ -61,40 +61,86 @@ R2HP4JWxXC3x0abNCHIg1mNCvdM6YLNq8vNpYwhyPtuELW8iMvBpw3ZfKg/RaskeqpXrdK
 GoR4N0Nh8km45vaiL8Y59f7sTSrbWFVHV+KL5lSliFuzB+Q3rDKa+y29MTKMBClvuGCD2n
 1got99UGhIr7WCV64UcDMr6h4=
 -----END OPENSSH PRIVATE KEY-----`,
-		passphrase: process.env.SSH_PRIVATE_KEY_PASSPHRASE || 'loveflutter'
+		passphrase: process.env.SSH_PRIVATE_KEY_PASSPHRASE || '',
 	}
 
 	private constructor() {
 		this.ssh = new NodeSSH();
-		this.connect().then(() => {
-		});
 	}
 
 	async connect() {
-		if (!this.ssh.isConnected()) {
-			await this.ssh.connect(this.config);
+		if (this.ssh.isConnected()) {
+			return;
+		}
+		const promise = new BlueBird(async (resolve, reject) => {
+			if (!this.ssh.isConnected()) {
+				try {
+					await this.ssh.connect(this.config);
+					resolve(true);
+				} catch (e) {
+					resolve(false);
+				}
+			} else {
+				resolve(true);
+			}
+		});
+		const promises = [];
+		promises.push(promise, promise, promise, promise, promise);
+		await BlueBird.mapSeries(promises, async (promise) => {
+			await promise;
+		});
+		if (this.ssh.isConnected()) {
 			console.log(`SSH connected to ${this.config.host}:${this.config.port} as ${this.config.username}`);
+		} else {
+			throw Error('SSH Connection Failed');
 		}
 	}
 
-	async exec(command: string, params: []) {
+	async exec(command: string, params: []): Promise<SSHExecCommandResponse | null> {
 		await this.connect();
-		return await this.ssh.exec(command, params);
+		let res: SSHExecCommandResponse | null = null;
+		const promise = new BlueBird(async (resolve, reject) => {
+			if (!res) {
+				try {
+					console.log(`⏳ Running command [${command}] ...`);
+					res = await this.ssh.execCommand(command);
+					console.log(`✅ Command [${command}] ran successfully!`);
+					resolve(res);
+				} catch (e) {
+					resolve(null)
+				}
+			} else {
+				resolve(res);
+			}
+		})
+		const promises = [];
+		promises.push(promise, promise, promise, promise, promise);
+		await BlueBird.mapSeries(promises, async promise => {
+			await promise;
+		});
+		return res;
 	}
 
 	async projectsExists(project: string) {
-		let response = await this.exec('ls', []);
-		return response.split('\n').includes(project);
+		let res = await this.exec('ls', []);
+		if (!res) {
+			return false;
+		}
+		if (res.code !== 0) return false;
+		return res.stdout.split('\n').includes(project);
 	}
 
 	async createProject(buildId: number, project: string) {
 		try {
 			await DBService.getInstance().updateBuildStatus(buildId, 'creating_flutter_project');
-			if (!await this.projectsExists(project)) {
-				await this.exec(`flutter create ${project};`, []);
+			// if (!await this.projectsExists(project)) {
+			const res = await this.exec(`flutter create ${project};`, []);
+			if (!res) {
+				return false;
 			}
-			return await this.projectsExists(project);
-
+			return res.code === 0;
+			// }
+			// return true;
 		} catch (e) {
 			return false;
 		}
@@ -103,10 +149,13 @@ GoR4N0Nh8km45vaiL8Y59f7sTSrbWFVHV+KL5lSliFuzB+Q3rDKa+y29MTKMBClvuGCD2n
 	async updateCode(buildId: number, code: string, project: string) {
 		await DBService.getInstance().updateBuildStatus(buildId, 'updating_code');
 		try {
-			await this.exec(`cat << 'EOF' > ~/${project}/lib/main.dart
+			const res = await this.exec(`cat << 'EOF' > ~/${project}/lib/main.dart
 ${code}
 EOF`, []);
-			return true;
+			if (!res) {
+				return false;
+			}
+			return res.code === 0;
 		} catch (e) {
 			return false;
 		}
@@ -115,9 +164,12 @@ EOF`, []);
 	async analyzeProject(buildId: number, project: string) {
 		await DBService.getInstance().updateBuildStatus(buildId, 'analyzing_project');
 		try {
-			const response = await this.exec(`cd ~/${project}; flutter analyze;`, []);
-			if (response.toLowerCase().includes('error')) return false;
-			return true;
+			const res = await this.exec(`cd ~/${project}; flutter analyze;`, []);
+			if (!res) {
+				return false;
+			}
+			if (res.code === 0) return true;
+			return !res.stdout.includes('error •');
 		} catch (e) {
 			return false;
 		}
@@ -126,18 +178,24 @@ EOF`, []);
 	async buildProject(buildId: number, project: string) {
 		await DBService.getInstance().updateBuildStatus(buildId, 'building_project');
 		try {
-			await this.exec(`cd ~/${project}; flutter build web --release;`, []);
-			return true;
+			const res = await this.exec(`cd ~/${project}; flutter build web --release;`, []);
+			if (!res) {
+				return false;
+			}
+			return res.code === 0;
 		} catch (e) {
 			return false;
 		}
 	}
 
 	async moveProjectBuild(buildId: number, project: string) {
-		await DBService.getInstance().updateBuildStatus(buildId, 'building_project');
+		await DBService.getInstance().updateBuildStatus(buildId, 'moving_project');
 		try {
-			await this.exec(`cd ~/${project};cp -r ~/${project}/build/web/ /var/www/aghighheidari/${project}`, []);
-			return true;
+			const res = await this.exec(`cp -r ~/${project}/build/web/ /var/www/aghighheidari/${project}`, []);
+			if (!res) {
+				return false;
+			}
+			return res.code === 0;
 		} catch (e) {
 			return false;
 		}
@@ -149,13 +207,12 @@ EOF`, []);
 			const script = `
 		cd /etc/nginx/sites-available;
 		touch ${project}.aghighheidari.ir.conf;
-		ln -s /etc/nginx/sites-available/${project}.aghighheidari.ir.conf /etc/nginx/sites-enabled/${project}.aghighheidari.ir.conf;
+		ln /etc/nginx/sites-available/${project}.aghighheidari.ir.conf /etc/nginx/sites-enabled/${project}.aghighheidari.ir.conf;
 		cat << 'EOF' > ${project}.aghighheidari.ir.conf
 server {
-    listen 80;
-    server_name first_app.aghighheidari.ir www.first_app.aghighheidari.ir;
+    server_name ${project}.aghighheidari.ir;
 
-    root ~/first_app/build/web/;
+    root /var/www/aghighheidari/${project};
 
     index index.html;
     location / {
@@ -164,8 +221,11 @@ server {
 }
 EOF
 		systemctl restart nginx;`;
-			await this.exec(script, []);
-			return true;
+			const res = await this.exec(script, []);
+			if (!res) {
+				return false;
+			}
+			return res.code === 0;
 		} catch (e) {
 			return false;
 		}
@@ -188,7 +248,7 @@ EOF
 			url: `https://api.cloudflare.com/client/v4/zones/${process.env.CLOUDFLARE_ZONE_ID || '0b97b95bf75b05ca391e0b290275ad43'}/dns_records`,
 			headers: {
 				'Content-Type': 'application/json',
-				'Authorization': 'Bearer p9lxmGIXV2XfwgTpEQ9NleW70AYTcWYoZdX_e-vI'
+				'Authorization': `Bearer ${process.env.CLOUDFLARE_TOKEN || ''}`
 			},
 			data: data
 		};
@@ -204,9 +264,12 @@ EOF
 	async handleSSLCertificate(buildId: number, project: string) {
 		await DBService.getInstance().updateBuildStatus(buildId, 'handling_ssl_certificate');
 		try {
-			const script = `certbot run -n --nginx --agree-tos -d ${project}.aghighheidari.ir  -m  mygmailid@gmail.com  --redirect`;
-			await this.exec(script, []);
-			return true;
+			const script = `certbot run -n --nginx --agree-tos -d ${project}.aghighheidari.ir  -m  heidariaghigh@gmail.com  --redirect`;
+			const res = await this.exec(script, []);
+			if (!res) {
+				return false;
+			}
+			return res.code === 0;
 		} catch (e) {
 			return false;
 		}

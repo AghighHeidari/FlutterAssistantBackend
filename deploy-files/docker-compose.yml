@@ -20,11 +20,13 @@ services:
       - PGDB_USERNAME=aghigh
       - PGDB_PASSWORD=123456
       - PGDB_DATABASE_NAME=flutter_assistant_db
-      - OPENAI_API_KEY=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
+      - OPENAI_API_KEY=$OPENAI_API_KEY
       - SSH_HOST=156.236.31.192
       - SSH_PORT=2112
       - SSH_USER=root
-      - SSH_PRIVATE_KEY_PASSPHRASE=loveflutter
+      - SSH_PRIVATE_KEY_PASSPHRASE=$SSH_PRIVATE_KEY_PASSPHRASE
+      - CLOUDFLARE_ZONE_ID=0b97b95bf75b05ca391e0b290275ad43
+      - CLOUDFLARE_TOKEN=$CLOUDFLARE_TOKEN
     networks:
       - my_network
 
@@ -40,7 +42,6 @@ services:
       - "127.0.0.1:5432:5432"
     volumes:
       - ~/flutter-assistant-data/postgres_data:/var/lib/postgresql/data/
-      - ~/flutter-assistant-data/postgres_data:/digikala_pricing_db.bak
       - ../database/postgres:/docker-entrypoint-initdb.d/
     networks:
       - my_network
