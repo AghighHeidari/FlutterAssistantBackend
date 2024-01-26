@@ -256,8 +256,12 @@ EOF
 		try {
 			await axios.request(config);
 			return true;
-		} catch (e) {
-			return false;
+		} catch (e: any) {
+			try {
+				return e?.response?.data?.errors[0]?.code === 81057;
+			} catch (e) {
+				return false;
+			}
 		}
 	}
 

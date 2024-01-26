@@ -69,8 +69,11 @@ class OpenaiController {
 				}
 			} catch (e) {
 				console.log(e);
+				resolve(null);
 				// reject(e);
 			}
+			resolve(null);
+
 		});
 		threadPromises.push(threadPromise, threadPromise, threadPromise, threadPromise, threadPromise);
 		await BlueBird.mapSeries(threadPromises, async (promise) => {
@@ -104,17 +107,21 @@ class OpenaiController {
 							resolve(url)
 						} else {
 							console.error('Publishing code failed!');
+							resolve(null);
 							// reject('Publishing code failed!');
 						}
 					} catch (e: any) {
 						console.log(e);
+						resolve(null);
 						// reject(e);
 					}
 				}
 			} catch (e) {
 				console.log(e);
+				resolve(null);
 				// reject(e)
 			}
+			resolve(null);
 		});
 		promptPromises.push(promptPromise, promptPromise, promptPromise, promptPromise, promptPromise);
 		await BlueBird.mapSeries(promptPromises, async (promise) => {
